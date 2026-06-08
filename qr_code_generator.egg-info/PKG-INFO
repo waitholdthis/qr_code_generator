@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: qr-code-generator
+Version: 0.1.0
+Summary: Turn images into QR codes
+Requires-Python: >=3.8
+Requires-Dist: qrcode[pil]
+Requires-Dist: click>=8.1

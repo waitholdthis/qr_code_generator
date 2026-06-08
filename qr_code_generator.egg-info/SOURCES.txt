@@ -1,0 +1,13 @@
+README.md
+pyproject.toml
+core/__init__.py
+core/qr_engine.py
+helpers/__init__.py
+helpers/image.py
+helpers/logo.py
+qr_code_generator.egg-info/PKG-INFO
+qr_code_generator.egg-info/SOURCES.txt
+qr_code_generator.egg-info/dependency_links.txt
+qr_code_generator.egg-info/entry_points.txt
+qr_code_generator.egg-info/requires.txt
+qr_code_generator.egg-info/top_level.txt
