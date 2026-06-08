@@ -13,10 +13,11 @@ def qr_from_hidden(
     qr_size: int = 256,
     scale: float = 0.40,
     alpha: int = 180,
-    strength: int = 35,
+    strength: int = 65,
     finder_boost: float = 1.85,
     min_short_side: int = 768,
     placement: str = "auto",
+    light_strength_ratio: float = 0.80,
 ) -> str:
     """Blend a phone-scannable QR into image luminance while preserving composition."""
     base = Image.open(logo_path).convert("RGB")
@@ -28,6 +29,7 @@ def qr_from_hidden(
         strength=strength,
         finder_boost=finder_boost,
         placement=placement,
+        light_strength_ratio=light_strength_ratio,
     )
     out.save(output_path)
     return output_path
@@ -53,6 +55,7 @@ def _blend_luminance_qr(
     strength: int,
     finder_boost: float,
     placement: str,
+    light_strength_ratio: float,
 ) -> Image.Image:
     matrix_size = len(matrix)
     w, h = base.size
@@ -64,13 +67,15 @@ def _blend_luminance_qr(
     out = base.copy()
     pixels = out.load()
     opacity = max(0.05, min(strength / 100, 1.0))
+    dark_target = _accent_shadow_color(base)
+    light_target = (255, 255, 255)
 
     for my, row in enumerate(matrix):
         for mx, dark in enumerate(row):
-            module_opacity = opacity
-            if _is_finder_region(mx, my, matrix_size):
+            module_opacity = opacity if dark else opacity * max(0.0, min(light_strength_ratio, 1.0))
+            if dark and _is_finder_region(mx, my, matrix_size):
                 module_opacity = min(1.0, opacity * finder_boost)
-            target_luma = 0 if dark else 255
+            target = dark_target if dark else light_target
 
             for py in range(my * module_px, (my + 1) * module_px):
                 y = y0 + py
@@ -82,9 +87,9 @@ def _blend_luminance_qr(
                         continue
                     r, g, b = pixels[x, y]
                     pixels[x, y] = (
-                        _mix_channel(r, target_luma, module_opacity),
-                        _mix_channel(g, target_luma, module_opacity),
-                        _mix_channel(b, target_luma, module_opacity),
+                        _mix_channel(r, target[0], module_opacity),
+                        _mix_channel(g, target[1], module_opacity),
+                        _mix_channel(b, target[2], module_opacity),
                     )
 
     return out
@@ -176,6 +181,35 @@ def _region_score(gray: Image.Image, x0: int, y0: int, w: int, h: int) -> float:
     mean = total / count
     variance = total_sq / count - mean * mean
     return variance + edges / count
+
+
+def _accent_shadow_color(img: Image.Image) -> tuple[int, int, int]:
+    sample = img.resize((96, max(1, int(96 * img.height / img.width))), Image.Resampling.BILINEAR)
+    candidates: list[tuple[int, int, int]] = []
+    for r, g, b in sample.getdata():
+        luma = _luma((r, g, b))
+        chroma = max(r, g, b) - min(r, g, b)
+        if luma < 180 and chroma > 18:
+            candidates.append((r, g, b))
+
+    if not candidates:
+        return (36, 36, 36)
+
+    candidates.sort(key=lambda color: (_luma(color), -(max(color) - min(color))))
+    keep = candidates[: max(12, len(candidates) // 3)]
+    avg = tuple(int(sum(color[i] for color in keep) / len(keep)) for i in range(3))
+    return _force_luma(avg, 72)
+
+
+def _force_luma(color: tuple[int, int, int], target_luma: int) -> tuple[int, int, int]:
+    current = max(1, _luma(color))
+    factor = target_luma / current
+    return tuple(_clamp(int(channel * factor)) for channel in color)
+
+
+def _luma(color: tuple[int, int, int]) -> int:
+    r, g, b = color
+    return int(0.299 * r + 0.587 * g + 0.114 * b)
 
 
 def _is_finder_region(x: int, y: int, matrix_size: int) -> bool:

@@ -25,10 +25,11 @@ import helpers.logo as logo_helper
 @click.option("--qr-size", default=256, show_default=True, help="QR code pixel size for hidden/brand mode.")
 @click.option("--scale", default=0.40, show_default=True, help="QR coverage relative to the image short side in hidden/subtle mode.")
 @click.option("--alpha", default=175, show_default=True, help="Compatibility option for old hidden-mode commands.")
-@click.option("--strength", default=35, show_default=True, help="QR blend strength for hidden/subtle mode. Increase if phones cannot scan.")
+@click.option("--strength", default=65, show_default=True, help="QR blend strength for hidden/subtle mode. Increase if phones cannot scan.")
 @click.option("--finder-boost", default=1.85, show_default=True, help="Extra contrast multiplier for QR finder corners.")
 @click.option("--min-short-side", default=768, show_default=True, help="Upscale subtle outputs below this short-side size for camera scanning.")
 @click.option("--placement", default="auto", show_default=True, help="QR placement: auto, center, top-left, top-right, bottom-left, bottom-right.")
+@click.option("--light-blend", default=0.80, show_default=True, help="How strongly light QR modules blend toward highlight tones.")
 def main(
     mode: str,
     input: str,
@@ -42,6 +43,7 @@ def main(
     finder_boost: float,
     min_short_side: int,
     placement: str,
+    light_blend: float,
 ) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -81,6 +83,7 @@ def main(
             finder_boost=finder_boost,
             min_short_side=min_short_side,
             placement=placement,
+            light_strength_ratio=light_blend,
         )
         click.echo(f"Saved subtle camera-scannable QR image to {out}")
         return
