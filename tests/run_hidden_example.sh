@@ -1,1 +1,1 @@
-python -m cli -m hidden -i https://example.com -l tests/fixtures/CCRA_Logo.jpg -o samples/CCRA_Logo_hidden_qr.png --qr-size 320 --alpha 160
+python3 -m cli -m hidden -i https://example.com -l tests/fixtures/CCRA_Logo.jpg -o samples/CCRA_Logo_hidden_qr.png --qr-size 320 --alpha 160

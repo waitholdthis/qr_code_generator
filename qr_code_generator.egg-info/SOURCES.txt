@@ -2,6 +2,7 @@ README.md
 pyproject.toml
 core/__init__.py
 core/qr_engine.py
+core/qr_hidden.py
 helpers/__init__.py
 helpers/image.py
 helpers/logo.py

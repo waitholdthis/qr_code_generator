@@ -8,7 +8,9 @@ from flask import Flask, flash, redirect, render_template_string, request, send_
 from werkzeug.utils import secure_filename
 
 import helpers.image as image_helper
-from core.qr_engine import qr_from_image
+import core.qr_hidden as qr_hidden
+from core.qr_engine import qr_from_data, qr_from_image
+from helpers.logo import center_logo
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
@@ -24,12 +26,25 @@ HTML = """\
 <form method=post enctype=multipart/form-data>
   <input type=file name=picture required />
   <select name=mode>
-    <option value=data selected>Data QR</option>
+    <option value=subtle selected>Subtle Camera QR</option>
+    <option value=data>Data QR</option>
     <option value=brand>Brand QR</option>
   </select>
-  <input type=text name=text placeholder='Text or URL for brand QR' />
+  <input type=text name=text placeholder='Text or URL to scan' />
   <br/>
   <label>Max short-side (data mode): <input type=number name=max_size value=16 min=4 max=64 /></label>
+  <br/>
+  <label>QR coverage: <input type=number name=scale value=0.40 min=0.35 max=0.95 step=0.01 /></label>
+  <label>Scan strength: <input type=number name=strength value=35 min=8 max=100 /></label>
+  <label>Min short side: <input type=number name=min_short_side value=768 min=256 max=2400 /></label>
+  <select name=placement>
+    <option value=auto selected>Auto placement</option>
+    <option value=center>Center</option>
+    <option value=top-left>Top left</option>
+    <option value=top-right>Top right</option>
+    <option value=bottom-left>Bottom left</option>
+    <option value=bottom-right>Bottom right</option>
+  </select>
   <br/>
   <button type=submit>Generate</button>
 </form>
@@ -62,6 +77,10 @@ def index() -> str | bytes:
             file = request.files["picture"]
             mode = request.form.get("mode", "data")
             max_size = int(request.form.get("max_size", 16) or 16)
+            scale = float(request.form.get("scale", 0.40) or 0.40)
+            strength = int(request.form.get("strength", 35) or 35)
+            min_short_side = int(request.form.get("min_short_side", 768) or 768)
+            placement = request.form.get("placement", "auto")
             text = (request.form.get("text") or "").strip()
 
             if file.filename == "":
@@ -75,13 +94,32 @@ def index() -> str | bytes:
                 file.save(str(src_path))
 
                 try:
-                    image_helper.load_image(src_path)  # validate path
-                    qr_img = qr_from_image(Image.open(src_path), max_size=max_size)
-                    qr_img.save(str(out_path))
-                    qr_path = f"/files/{out_path.name}"
+                    uploaded_img = image_helper.load_image(src_path)
+                    if mode == "brand":
+                        if not text:
+                            raise ValueError("Text or URL is required for brand mode")
+                        qr_img = qr_from_data(text, output_size=2048)
+                        qr_img = center_logo(qr_img=qr_img, logo=uploaded_img)
+                    elif mode == "subtle":
+                        if not text:
+                            raise ValueError("Text or URL is required for subtle camera QR mode")
+                        qr_hidden.qr_from_hidden(
+                            data=text,
+                            logo_path=str(src_path),
+                            output_path=str(out_path),
+                            scale=scale,
+                            strength=strength,
+                            min_short_side=min_short_side,
+                            placement=placement,
+                        )
+                        qr_path = f"/files/{out_path.name}"
+                    else:
+                        qr_img = qr_from_image(uploaded_img, max_size=max_size)
+                    if mode != "subtle":
+                        qr_img.save(str(out_path))
+                        qr_path = f"/files/{out_path.name}"
                 except Exception as exc:  # pragma: no cover - defensive guard
                     error = f"Generation failed: {exc}"
-                    raise
                 finally:
                     if src_path.exists():
                         src_path.unlink()

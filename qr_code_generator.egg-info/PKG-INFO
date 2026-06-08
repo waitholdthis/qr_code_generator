@@ -5,3 +5,4 @@ Summary: Turn images into QR codes
 Requires-Python: >=3.8
 Requires-Dist: qrcode[pil]
 Requires-Dist: click>=8.1
+Requires-Dist: Flask>=3.0
