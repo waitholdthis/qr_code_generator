@@ -1,26 +1,19 @@
 # QR Code Generator
 
 Turn images into QR codes in two ways:
-- **Data QR**: encode the image bytes into a QR payload and reconstruct an image with a minimised QR overlay.
-- **Branded QR**: generate a normal QR code and embed/open a logo or image inside it.
 
-## Quick start
+- **Data mode**: `python qr_code_generator/qr_code_generator.py -i <image> -o out.png`
+- **Brand mode**: `python qr_code_generator/qr_code_generator.py -i <text_or_url> -l <logo_image> -o out.png`
 
-```bash
-python -m pip install -e .
-```
-
-## Commands
+Or use the upload UI:
 
 ```bash
-# data mode - encode image into QR, then reconstruct
-qr -m data -i samples/photo.png -o out/data_qr.png
-
-# brand mode - normal QR with image center logo
-qr -m brand -i https://example.com -l samples/logo.png -o out/branded_qr.png
+python app.py
 ```
 
-## Notes
+Then open `http://127.0.0.1:7860/` and upload any `jpg`, `png`, or `webp` picture.
 
-- Data QR reconstruction is lossy and meant for small images.
-- Brand mode keeps the QR scannable because the error correction absorbs the logo area.
+## Outputs
+
+Data QR: `samples/CCRA_Logo_data_qr.png`  
+Branded QR: `samples/CCRA_Logo_branded_qr.png`
