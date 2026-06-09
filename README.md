@@ -3,6 +3,8 @@
 Turn images into QR codes in two ways:
 
 - **Data mode**: `python qr_code_generator/qr_code_generator.py -i <image> -o out.png`
+- **Picture Mosaic mode**: `python3 cli.py --mode mosaic -i <image> --text <url_or_text> -o out.png`
+- **Colored Photo mode**: `python3 cli.py --mode color -i <image> --text <url_or_text> --qr-color '#00e5ff' -o out.png`
 - **Brand mode**: `python qr_code_generator/qr_code_generator.py -i <text_or_url> -l <logo_image> -o out.png`
 
 Or use the upload UI:

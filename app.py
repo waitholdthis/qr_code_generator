@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 
 import helpers.image as image_helper
 import core.qr_hidden as qr_hidden
-from core.qr_engine import qr_from_data, qr_from_image
+from core.qr_engine import qr_from_colored_photo_overlay, qr_from_data, qr_from_image, qr_from_image_mosaic
 from helpers.logo import center_logo
 
 app = Flask(__name__)
@@ -478,6 +478,8 @@ HTML = """\
             <span>Mode <small class="hint">Output style</small></span>
             <select name="mode" title="Choose how the QR should be generated.">
               <option value="subtle" {% if form.mode == "subtle" %}selected{% endif %}>Subtle Camera QR</option>
+              <option value="color" {% if form.mode == "color" %}selected{% endif %}>Colored Photo QR</option>
+              <option value="mosaic" {% if form.mode == "mosaic" %}selected{% endif %}>Picture Mosaic QR</option>
               <option value="data" {% if form.mode == "data" %}selected{% endif %}>Data QR</option>
               <option value="brand" {% if form.mode == "brand" %}selected{% endif %}>Brand QR</option>
             </select>
@@ -487,6 +489,17 @@ HTML = """\
             <span>Text or URL <small class="hint">What the phone opens</small></span>
             <input type="text" name="text" value="{{ form.text }}" placeholder="https://example.com" title="Enter the URL or text encoded into subtle and brand QR modes." />
           </label>
+
+          <div class="inline-fields">
+            <label>
+              <span>QR color <small class="hint">Color mode</small></span>
+              <input type="color" name="qr_color" value="{{ form.qr_color }}" title="Sets the visible QR module color in Colored Photo QR mode." />
+            </label>
+            <label>
+              <span>Opacity <small class="hint">Color mode</small></span>
+              <input type="number" name="opacity" value="{{ form.opacity }}" min="0.15" max="1.00" step="0.01" title="Controls how strongly the colored QR is drawn over the original photo." />
+            </label>
+          </div>
 
           <div class="inline-fields">
             <label>
@@ -540,7 +553,7 @@ HTML = """\
         <div class="stage-header">
           <div>
             <h2>Scan signal, cinematic finish.</h2>
-            <p>Use Subtle Camera QR when preserving the original picture matters. Increase scan strength only as much as the phone camera requires.</p>
+            <p>Use Colored Photo QR when the photo should stay intact with a visible colored scan signal over it.</p>
           </div>
           <div class="mode-badge">{{ form.mode|replace("-", " ") }}</div>
         </div>
@@ -574,15 +587,23 @@ HTML = """\
       <div class="explain-grid">
         <article class="explain-item">
           <h3>Picture</h3>
-          <p>The source artwork. Subtle mode preserves this composition and blends a QR signal into its luminance.</p>
+          <p>The source artwork. Color mode keeps it intact, mosaic mode samples it into QR modules, and subtle mode blends a QR signal into its luminance.</p>
         </article>
         <article class="explain-item">
           <h3>Mode</h3>
-          <p>Subtle Camera QR blends into the picture, Brand QR places a logo in a standard QR, and Data QR encodes sampled image data.</p>
+          <p>Colored Photo QR draws a visible colored QR over the original photo, Picture Mosaic QR turns the photo into modules, Subtle Camera QR blends into the picture, Brand QR places a logo in a standard QR, and Data QR encodes sampled image data.</p>
         </article>
         <article class="explain-item">
           <h3>Text or URL</h3>
-          <p>The destination encoded into Subtle Camera QR and Brand QR. Short URLs scan more reliably.</p>
+          <p>The destination encoded into Colored Photo QR, Picture Mosaic QR, Subtle Camera QR, and Brand QR. Short URLs scan more reliably.</p>
+        </article>
+        <article class="explain-item">
+          <h3>QR Color</h3>
+          <p>Sets the overlay color for Colored Photo QR. Bright cyan, pink, or green usually stand out well against photos.</p>
+        </article>
+        <article class="explain-item">
+          <h3>Opacity</h3>
+          <p>Sets how strongly the colored QR is drawn. Higher values are easier to see and usually easier to scan.</p>
         </article>
         <article class="explain-item">
           <h3>QR Coverage</h3>
@@ -639,6 +660,8 @@ def index() -> str | bytes:
         "light_blend": "0.80",
         "min_short_side": 768,
         "placement": "auto",
+        "qr_color": "#00e5ff",
+        "opacity": "0.82",
     }
 
     if request.method == "POST":
@@ -653,6 +676,8 @@ def index() -> str | bytes:
             light_blend = float(request.form.get("light_blend", 0.80) or 0.80)
             min_short_side = int(request.form.get("min_short_side", 768) or 768)
             placement = request.form.get("placement", "auto")
+            qr_color = request.form.get("qr_color", "#00e5ff")
+            opacity = float(request.form.get("opacity", 0.82) or 0.82)
             text = (request.form.get("text") or "").strip()
             form.update(
                 {
@@ -664,6 +689,8 @@ def index() -> str | bytes:
                     "light_blend": f"{light_blend:.2f}",
                     "min_short_side": min_short_side,
                     "placement": placement,
+                    "qr_color": qr_color,
+                    "opacity": f"{opacity:.2f}",
                 }
             )
 
@@ -684,6 +711,22 @@ def index() -> str | bytes:
                             raise ValueError("Text or URL is required for brand mode")
                         qr_img = qr_from_data(text, output_size=2048)
                         qr_img = center_logo(qr_img=qr_img, logo=uploaded_img)
+                    elif mode == "mosaic":
+                        if not text:
+                            raise ValueError("Text or URL is required for picture mosaic QR mode")
+                        qr_img = qr_from_image_mosaic(uploaded_img, data=text)
+                    elif mode == "color":
+                        if not text:
+                            raise ValueError("Text or URL is required for colored photo QR mode")
+                        qr_img = qr_from_colored_photo_overlay(
+                            uploaded_img,
+                            data=text,
+                            color=qr_color,
+                            scale=scale,
+                            opacity=opacity,
+                            min_short_side=min_short_side,
+                            placement=placement,
+                        )
                     elif mode == "subtle":
                         if not text:
                             raise ValueError("Text or URL is required for subtle camera QR mode")

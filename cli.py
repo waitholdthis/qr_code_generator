@@ -17,11 +17,15 @@ import helpers.logo as logo_helper
 
 
 @click.command()
-@click.option("-m", "--mode", required=True, type=click.Choice(["data", "brand", "hidden", "subtle"], case_sensitive=False))
-@click.option("-i", "--input", required=True, help="Image path/URL for `data` mode, text/URL for `brand` mode, or website/text for `hidden`/`subtle` mode.")
+@click.option("-m", "--mode", required=True, type=click.Choice(["data", "brand", "hidden", "subtle", "mosaic", "color"], case_sensitive=False))
+@click.option("-i", "--input", required=True, help="Image path/URL for `data`/`mosaic`/`color` mode, text/URL for `brand` mode, or website/text for `hidden`/`subtle` mode.")
 @click.option("-o", "--output", required=True, type=click.Path(path_type=Path))
 @click.option("-l", "--logo", required=False, type=click.Path(path_type=Path), help="Logo/image for `brand`/`hidden`/`subtle` mode.")
 @click.option("--max-size", default=48, show_default=True, help="Max short-side in cells for the data mode reconstruction.")
+@click.option("--text", default="", show_default=True, help="Text/URL encoded by mosaic mode.")
+@click.option("--output-size", default=1600, show_default=True, help="Output pixel size for mosaic mode.")
+@click.option("--qr-color", default="#00e5ff", show_default=True, help="Hex color for color overlay mode.")
+@click.option("--opacity", default=0.82, show_default=True, help="QR opacity for color overlay mode.")
 @click.option("--qr-size", default=256, show_default=True, help="QR code pixel size for hidden/brand mode.")
 @click.option("--scale", default=0.40, show_default=True, help="QR coverage relative to the image short side in hidden/subtle mode.")
 @click.option("--alpha", default=175, show_default=True, help="Compatibility option for old hidden-mode commands.")
@@ -36,6 +40,10 @@ def main(
     output: Path,
     logo: Path | None,
     max_size: int,
+    text: str,
+    output_size: int,
+    qr_color: str,
+    opacity: float,
     qr_size: int,
     scale: float,
     alpha: int,
@@ -52,6 +60,32 @@ def main(
         qr_img = qr_engine.qr_from_image(img, max_size=max_size, output_size=None)
         qr_img.save(str(output))
         click.echo(f"Saved data QR to {output}")
+        return
+
+    if mode.lower() == "mosaic":
+        if not text:
+            raise click.UsageError("--text is required for mosaic mode")
+        img = image_helper.load_image(input)
+        qr_img = qr_engine.qr_from_image_mosaic(img, data=text, output_size=output_size)
+        qr_img.save(str(output))
+        click.echo(f"Saved picture mosaic QR to {output}")
+        return
+
+    if mode.lower() == "color":
+        if not text:
+            raise click.UsageError("--text is required for color overlay mode")
+        img = image_helper.load_image(input)
+        qr_img = qr_engine.qr_from_colored_photo_overlay(
+            img,
+            data=text,
+            color=qr_color,
+            scale=scale,
+            opacity=opacity,
+            placement=placement,
+            min_short_side=min_short_side,
+        )
+        qr_img.save(str(output))
+        click.echo(f"Saved colored photo QR to {output}")
         return
 
     if mode.lower() == "brand":
