@@ -6,8 +6,11 @@ build-backend = "setuptools.build_meta"
 name = "qr-code-generator"
 version = "0.1.0"
 description = "Turn images into QR codes"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = ["qrcode[pil]", "click>=8.1", "Flask>=3.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
 
 [project.scripts]
 qr = "cli:main"

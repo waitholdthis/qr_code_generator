@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import hashlib
 from typing import Iterable, Tuple
 
@@ -22,7 +21,7 @@ def qr_from_data(payload: str | bytes, output_size: int = 2048) -> Image.Image:
         box_size=10,
         border=4,
     )
-    qr.add_data(base64.b64encode(payload).decode("ascii"))
+    qr.add_data(payload)
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white").convert("RGBA")
     if output_size:

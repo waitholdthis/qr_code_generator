@@ -3,8 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from flask import render_template_string, request, send_file
-from flask import Flask
+from flask import Flask, abort, render_template_string, request, send_from_directory
 from werkzeug.utils import secure_filename
 
 import helpers.image as image_helper
@@ -641,10 +640,44 @@ HTML = """\
 """
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+ALLOWED_MODES = {"brand", "mosaic", "color", "subtle", "data"}
+ALLOWED_PLACEMENTS = {"auto", "center", "top-left", "top-right", "bottom-left", "bottom-right"}
 
 
 def allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def parse_int_field(name: str, default: int, minimum: int, maximum: int) -> int:
+    raw = request.form.get(name, default)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise ValueError(f"{name.replace('_', ' ').title()} must be a whole number") from None
+    return max(minimum, min(maximum, value))
+
+
+def parse_float_field(name: str, default: float, minimum: float, maximum: float) -> float:
+    raw = request.form.get(name, default)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        raise ValueError(f"{name.replace('_', ' ').title()} must be a number") from None
+    return max(minimum, min(maximum, value))
+
+
+def normalize_mode(value: str) -> str:
+    mode = (value or "data").lower()
+    if mode not in ALLOWED_MODES:
+        raise ValueError("Unsupported QR generation mode")
+    return mode
+
+
+def normalize_placement(value: str) -> str:
+    placement = (value or "auto").lower()
+    if placement not in ALLOWED_PLACEMENTS:
+        raise ValueError("Unsupported QR placement")
+    return placement
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -669,37 +702,51 @@ def index() -> str | bytes:
             error = "Missing picture file"
         else:
             file = request.files["picture"]
-            mode = request.form.get("mode", "data")
-            max_size = int(request.form.get("max_size", 16) or 16)
-            scale = float(request.form.get("scale", 0.40) or 0.40)
-            strength = int(request.form.get("strength", 65) or 65)
-            light_blend = float(request.form.get("light_blend", 0.80) or 0.80)
-            min_short_side = int(request.form.get("min_short_side", 768) or 768)
-            placement = request.form.get("placement", "auto")
-            qr_color = request.form.get("qr_color", "#00e5ff")
-            opacity = float(request.form.get("opacity", 0.82) or 0.82)
-            text = (request.form.get("text") or "").strip()
-            form.update(
-                {
-                    "mode": mode,
-                    "text": text,
-                    "max_size": max_size,
-                    "scale": f"{scale:.2f}",
-                    "strength": strength,
-                    "light_blend": f"{light_blend:.2f}",
-                    "min_short_side": min_short_side,
-                    "placement": placement,
-                    "qr_color": qr_color,
-                    "opacity": f"{opacity:.2f}",
-                }
-            )
+            mode = "data"
+            max_size = 16
+            scale = 0.40
+            strength = 65
+            light_blend = 0.80
+            min_short_side = 768
+            placement = "auto"
+            qr_color = "#00e5ff"
+            opacity = 0.82
+            text = ""
+            filename = file.filename or ""
+            try:
+                mode = normalize_mode(request.form.get("mode", "data"))
+                max_size = parse_int_field("max_size", 16, 4, 64)
+                scale = parse_float_field("scale", 0.40, 0.35, 0.95)
+                strength = parse_int_field("strength", 65, 8, 100)
+                light_blend = parse_float_field("light_blend", 0.80, 0.05, 1.00)
+                min_short_side = parse_int_field("min_short_side", 768, 256, 2400)
+                placement = normalize_placement(request.form.get("placement", "auto"))
+                qr_color = request.form.get("qr_color", "#00e5ff")
+                opacity = parse_float_field("opacity", 0.82, 0.15, 1.00)
+                text = (request.form.get("text") or "").strip()
+                form.update(
+                    {
+                        "mode": mode,
+                        "text": text,
+                        "max_size": max_size,
+                        "scale": f"{scale:.2f}",
+                        "strength": strength,
+                        "light_blend": f"{light_blend:.2f}",
+                        "min_short_side": min_short_side,
+                        "placement": placement,
+                        "qr_color": qr_color,
+                        "opacity": f"{opacity:.2f}",
+                    }
+                )
+            except ValueError as exc:
+                error = str(exc)
 
-            if file.filename == "":
+            if not error and filename == "":
                 error = "No file selected"
-            elif not allowed_file(file.filename):
+            elif not error and not allowed_file(filename):
                 error = "Unsupported file type"
-            else:
-                suffix = Path(secure_filename(file.filename)).suffix.lower() or ".bin"
+            elif not error:
+                suffix = Path(secure_filename(filename)).suffix.lower() or ".bin"
                 src_path = OUT_DIR / f"src_{next_stamp()}{suffix}"
                 out_path = OUT_DIR / f"qr_{next_stamp()}.png"
                 file.save(str(src_path))
@@ -758,12 +805,12 @@ def index() -> str | bytes:
     return tmpl
 
 
-@app.route("/files/<name>")
-def serve(name: str) -> bytes:
-    path = OUT_DIR / name
-    if not path.exists():
-        return "Not found", 404
-    return send_file(path, mimetype="image/png")
+@app.route("/files/<path:name>")
+def serve(name: str):
+    requested = (OUT_DIR / name).resolve()
+    if not requested.is_file() or OUT_DIR not in requested.parents:
+        abort(404)
+    return send_from_directory(OUT_DIR, requested.name, mimetype="image/png")
 
 
 def next_stamp() -> int:
