@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 from flask import Flask, abort, render_template_string, request, send_from_directory
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 
 import helpers.image as image_helper
@@ -13,7 +14,11 @@ from helpers.logo import center_logo
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
-app.secret_key = os.urandom(16).hex()
+app.secret_key = os.environ.get("SECRET_KEY") or os.urandom(16).hex()
+
+# Trust the X-Forwarded-* headers set by Cloudflare / the platform's proxy so
+# generated URLs and the request scheme resolve to https in production.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 OUT_DIR = Path("uploads").resolve()
 OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -820,4 +825,7 @@ def next_stamp() -> int:
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=7860, debug=False)
+    # Local dev entrypoint. In production a WSGI server (gunicorn) serves
+    # `app:app` instead — see Procfile / render.yaml.
+    port = int(os.environ.get("PORT", "7860"))
+    app.run(host="0.0.0.0", port=port, debug=False)

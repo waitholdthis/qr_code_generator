@@ -1,0 +1,14 @@
+# Render Blueprint — auto-deploys this Flask app from GitHub.
+# In the Render dashboard: New > Blueprint, connect the repo, and it reads this file.
+services:
+  - type: web
+    name: qr-code-generator
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: SECRET_KEY
+        generateValue: true
